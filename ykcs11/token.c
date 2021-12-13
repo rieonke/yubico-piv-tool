@@ -408,7 +408,7 @@ CK_RV token_generate_key(ykpiv_state *state, CK_BYTE algorithm, CK_BYTE key, CK_
   *in_ptr++ = 1;
   *in_ptr++ = algorithm;
 
-  if(ykpiv_transfer_data(state, templ, in_data, in_ptr - in_data, data, &recv_len, &sw) != YKPIV_OK || sw != 0x9000) {
+  if(ykpiv_transfer_data(state, templ, in_data, in_ptr - in_data, data, &recv_len, &sw) != YKPIV_OK || sw != SW_SUCCESS) {
     DBG("Failed to generate key, sw = %04x.", sw);
     return CKR_DEVICE_ERROR;
   }
