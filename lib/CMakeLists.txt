@@ -60,27 +60,32 @@ if(BUILD_STATIC_LIB)
 endif(BUILD_STATIC_LIB)
 
 # dynamic library
-add_library(ykpiv_shared SHARED ${SOURCE})
-target_link_libraries(ykpiv_shared ${LIBCRYPTO_LIBRARIES} ${PCSC_LIBRARIES} ${PCSC_WIN_LIBS} ${PCSC_MACOSX_LIBS} ${PCSC_CUSTOM_LIBS})
-set_target_properties(ykpiv_shared PROPERTIES SOVERSION ${SO_VERSION} VERSION ${VERSION})
-if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    set_target_properties(ykpiv_shared PROPERTIES INSTALL_RPATH "${YKPIV_INSTALL_LIB_DIR}")
-endif()
-if(WIN32)
-    set_target_properties(ykpiv_shared PROPERTIES OUTPUT_NAME libykpiv)
-else(WIN32)
-    set_target_properties(ykpiv_shared PROPERTIES OUTPUT_NAME ykpiv)
-endif(WIN32)
-add_coverage(ykpiv_shared)
+if (BUILD_SHARED_LIB)
+    add_library(ykpiv_shared SHARED ${SOURCE})
+    target_link_libraries(ykpiv_shared ${LIBCRYPTO_LIBRARIES} ${PCSC_LIBRARIES} ${PCSC_WIN_LIBS} ${PCSC_MACOSX_LIBS} ${PCSC_CUSTOM_LIBS})
+    set_target_properties(ykpiv_shared PROPERTIES SOVERSION ${SO_VERSION} VERSION ${VERSION})
+    if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+        set_target_properties(ykpiv_shared PROPERTIES INSTALL_RPATH "${YKPIV_INSTALL_LIB_DIR}")
+    endif()
+    if(WIN32)
+        set_target_properties(ykpiv_shared PROPERTIES OUTPUT_NAME libykpiv)
+    else(WIN32)
+        set_target_properties(ykpiv_shared PROPERTIES OUTPUT_NAME ykpiv)
+    endif(WIN32)
+    add_coverage(ykpiv_shared)
+endif ()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ykpiv.pc.in ${CMAKE_CURRENT_SOURCE_DIR}/ykpiv.pc @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/ykpiv-config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/ykpiv-config.h @ONLY)
 
+if (BUILD_SHARED_LIB)
 install(
         TARGETS ykpiv_shared
         ARCHIVE DESTINATION ${YKPIV_INSTALL_LIB_DIR}
         LIBRARY DESTINATION ${YKPIV_INSTALL_LIB_DIR}
         RUNTIME DESTINATION ${YKPIV_INSTALL_BIN_DIR})
+endif (BUILD_SHARED_LIB)
+
 if(BUILD_STATIC_LIB)
     install(
         TARGETS ykpiv

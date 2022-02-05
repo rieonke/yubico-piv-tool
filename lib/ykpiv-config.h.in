@@ -105,6 +105,21 @@ extern "C"
      */
 #cmakedefine HAVE_PCSC_WINSCARD_H @HAVE_PCSC_WINSCARD_H@
 
+    /**
+     * USE_MBEDTLS
+     *
+     * Pre-processor symbol indicating that using mbedTLS as crypto library
+     * or not.
+     */
+#cmakedefine USE_MBEDTLS @USE_MBEDTLS@
+
+    /**
+     * USE_OPENSSL
+     *
+     * Pre-processor symbol indicating that using OpenSSL as crypto library
+     * or not.
+     */
+#cmakedefine USE_OPENSSL @USE_OPENSSL@
 
 	const char *ykpiv_check_version (const char *req_version);
 

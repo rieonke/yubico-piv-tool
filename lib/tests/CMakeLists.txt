@@ -41,13 +41,19 @@ if(NOT DEFINED SKIP_TESTS)
     set(SOURCE_API api.c)
     set(SOURCE_PARSE_KEY parse_key.c)
 
+    if (BUILD_STATIC_LIB)
+        set(YKPIV_LIB ykpiv)
+    else()
+        set(YKPIV_LIB ykpiv_shared)
+    endif ()
+
     add_executable (test_basic ${SOURCE_BASIC})
     add_executable(test_api ${SOURCE_API})
     add_executable(test_parse_key ${SOURCE_PARSE_KEY})
 
-    target_link_libraries(test_basic ykpiv_shared ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
-    target_link_libraries(test_api ykpiv_shared ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
-    target_link_libraries(test_parse_key ykpiv_shared ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
+    target_link_libraries(test_basic ${YKPIV_LIB} ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
+    target_link_libraries(test_api ${YKPIV_LIB} ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
+    target_link_libraries(test_parse_key ${YKPIV_LIB} ${LIBCRYPTO_LDFLAGS} ${LIBCHECK_LDFLAGS})
 
     if(${ENABLE_HARDWARE_TESTS})
         set(HW_TESTS 1)

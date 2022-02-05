@@ -37,15 +37,25 @@
 #else
 #include <ctype.h>
 #include <syslog.h>
+#ifdef USE_MBEDTLS
+#include <mbedtls/platform.h>
+#include <mbedtls/md.h>
+#include <mbedtls/des.h>
+#include <mbedtls/ctr_drbg.h>
+#include <mbedtls/entropy.h>
+#include <mbedtls/pkcs5.h>
+#else
 #include <openssl/des.h>
 #include <openssl/evp.h>
 #include <openssl/rand.h>
+#endif
 #endif
 
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 /*
 ** Definitions
@@ -117,9 +127,13 @@ const ALG_ID PRIVATEKEY_EXPOF1_ALG = CALG_RSA_KEYX;
 #else
 
 struct des_key {
+#ifdef USE_MBEDTLS
+  char data[MBEDTLS_DES_KEY_SIZE * 3];
+#else
   DES_key_schedule ks1;
   DES_key_schedule ks2;
   DES_key_schedule ks3;
+#endif
 };
 
 #endif
@@ -228,6 +242,12 @@ des_rc des_import_key(const int type, const unsigned char* keyraw, const size_t 
 
 #else
 
+#ifdef USE_MBEDTLS
+  if (keyrawlen != cb_expectedkey) goto ERROR_EXIT;
+  if (!(*key = (des_key*)malloc(sizeof(des_key)))) { rc = DES_MEMORY_ERROR; goto ERROR_EXIT; }
+  memset(*key, 0, sizeof(des_key));
+  memcpy((*key)->data, keyraw, keyrawlen);
+#else
   const_DES_cblock key_tmp;
   size_t cb_keysize = 8;
 
@@ -256,6 +276,7 @@ des_rc des_import_key(const int type, const unsigned char* keyraw, const size_t 
   DES_set_key_unchecked(&key_tmp, &((*key)->ks2));
   memcpy(key_tmp, keyraw + (2 * cb_keysize), cb_keysize);
   DES_set_key_unchecked(&key_tmp, &((*key)->ks3));
+#endif
 
 #endif
 
@@ -326,9 +347,19 @@ des_rc des_encrypt(des_key* key, const unsigned char* in, const size_t inlen, un
 
 #else
 
+#ifdef USE_MBEDTLS
+
+  mbedtls_des3_context ctx;
+  mbedtls_des3_init( &ctx );
+  mbedtls_des3_set3key_enc( &ctx, key->data);
+  mbedtls_des3_crypt_ecb( &ctx, in, out );
+  *outlen = 8;
+
+  mbedtls_des3_free( &ctx );
+#else
   /* openssl returns void */
   DES_ecb3_encrypt((const_DES_cblock *)in, (DES_cblock*)out, &(key->ks1), &(key->ks2), &(key->ks3), 1);
-
+#endif
 #endif
 
 EXIT:
@@ -358,8 +389,18 @@ des_rc des_decrypt(des_key* key, const unsigned char* in, const size_t inlen, un
 
 #else
 
+#ifdef USE_MBEDTLS
+  mbedtls_des3_context ctx;
+  mbedtls_des3_init( &ctx );
+  mbedtls_des3_set3key_dec( &ctx, key->data);
+  mbedtls_des3_crypt_ecb( &ctx, in, out );
+  *outlen = 8;
+
+  mbedtls_des3_free( &ctx );
+#else
   /* openssl returns void */
   DES_ecb3_encrypt((const_DES_cblock*)in, (DES_cblock*)out, &(key->ks1), &(key->ks2), &(key->ks3), 0);
+#endif
 
 #endif
 
@@ -425,9 +466,17 @@ bool yk_des_is_weak_key(const unsigned char *key, const size_t cb_key) {
   yc_memzero(tmp, DES_LEN_3DES);
   return rv;
 #else
+
+#ifdef USE_MBEDTLS
+  return mbedtls_des_key_check_weak(key)
+      || mbedtls_des_key_check_weak(key + DES_LEN_DES)
+      || mbedtls_des_key_check_weak(key + 2 *DES_LEN_DES);
+#else
   (void)cb_key; /* unused */
 
   return DES_is_weak_key((const_DES_cblock *)key);
+#endif
+
 #endif
 }
 
@@ -449,9 +498,41 @@ prng_rc _ykpiv_prng_generate(unsigned char *buffer, const size_t cb_req) {
   }
 
 #else
+
+#ifdef USE_MBEDTLS
+
+  if (buffer == NULL) return false;
+
+  int err;
+  mbedtls_ctr_drbg_context drbg_ctx;
+  mbedtls_entropy_context entropy;
+
+  mbedtls_entropy_init(&entropy);
+  mbedtls_ctr_drbg_init(&drbg_ctx);
+  err = mbedtls_ctr_drbg_seed(&drbg_ctx, mbedtls_entropy_func, &entropy, NULL, 0);
+  if (err != 0) {
+    fprintf(stderr, "Error: cannot generate random data\n");
+    goto exit;
+  }
+
+  err = mbedtls_ctr_drbg_random(&drbg_ctx, buffer, cb_req);
+  if (err != 0) {
+    fprintf(stderr, "Error: cannot generate random data\n");
+    goto exit;
+  }
+
+  exit:
+  mbedtls_ctr_drbg_free(&drbg_ctx);
+  mbedtls_entropy_free(&entropy);
+  if (err != 0) rc = PRNG_GENERAL_ERROR;
+
+#else
+
   if (RAND_bytes(buffer, cb_req) <= 0) {
     rc = PRNG_GENERAL_ERROR;
   }
+
+#endif
 
 #endif
 
@@ -488,8 +569,40 @@ pkcs5_rc pkcs5_pbkdf2_sha1(const uint8_t* password, const size_t cb_password, co
 
 #else
 
+#ifdef USE_MBEDTLS
+
+  mbedtls_md_context_t ctx;
+  const mbedtls_md_info_t *info;
+
+
+  int ret;
+
+  mbedtls_md_init(&ctx);
+
+  info = mbedtls_md_info_from_type( MBEDTLS_MD_SHA1 );
+  if(info == NULL) {
+    ret = 1;
+    goto exit;
+  }
+
+  if((ret = mbedtls_md_setup(&ctx, info, 1)) != 0) {
+    ret = 1;
+    goto exit;
+  }
+
+  mbedtls_pkcs5_pbkdf2_hmac(&ctx, password, cb_password, salt, cb_salt, iterations, cb_key, (unsigned char*) key);
+
+  exit:
+  mbedtls_md_free( &ctx );
+  if (ret != 0)
+    rc = PKCS5_GENERAL_ERROR;
+
+#else
+
   if(PKCS5_PBKDF2_HMAC_SHA1((const char*)password, cb_password, salt, cb_salt, iterations, cb_key, (unsigned char*)key) <= 0)
     rc = PKCS5_GENERAL_ERROR;
+
+#endif
 
 #endif
 
