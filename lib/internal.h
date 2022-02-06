@@ -246,8 +246,13 @@ void yc_log_event(uint32_t id, yc_log_level_t level, const char *sz_format, ...)
 #include <strings.h>
 #define yc_memzero explicit_bzero
 #elif defined(__linux__)
+#ifdef USE_MBEDTLS
+#include <mbedtls/platform_util.h>
+#define yc_memzero mbedtls_platform_zeroize
+#else
 #include <openssl/crypto.h>
 #define yc_memzero OPENSSL_cleanse
+#endif
 #else
 #define __STDC_WANT_LIB_EXT1__ 1
 #include <string.h>
